@@ -1,3 +1,8 @@
+ressources/*
+images/
+!ressources/sample_discogs_releases.xml
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
