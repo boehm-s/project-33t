@@ -7,7 +7,7 @@ import time
 from typing import List, Tuple
 
 
-class DiscogsReleasesXMLParser:
+class DiscogsAlbumCoverExtractor:
     """Parser for Discogs release dump files."""
 
     def __init__(self, discogs_client, input_file, images_dir):
@@ -15,6 +15,7 @@ class DiscogsReleasesXMLParser:
         self.discogs_client = discogs_client
         self.input_file = input_file
         self.images_dir = images_dir
+        self.start_time = time.time()
 
     def list_saved_release_id(self) -> List[int]:
         """Return a list of all saved releases ID."""
@@ -32,9 +33,19 @@ class DiscogsReleasesXMLParser:
         saved_release_ids = self.list_saved_release_id()
         return saved_release_ids[-1]
 
-    def parse(self):
-        """TODO."""
-        start_time = time.time()
+    def reset_rate_limit_timer(self):
+        """Reset the rate limiting timer."""
+        self.start_time = time.time()
+
+    def wait_for_rate_limit(self):
+        """Wait 1 second after last image request to Discogs."""
+        end_time = time.time()
+        ellapsed_time = end_time - self.start_time
+        sleep_time = max((1.02 - ellapsed_time), 0)
+        time.sleep(sleep_time)
+
+    def run(self):
+        """Extract the album covers."""
         latest_saved_release_id = self.get_latest_saved_release_id()
 
         for event, elem in etree.iterparse(self.input_file, events=("start",)):
@@ -54,10 +65,7 @@ class DiscogsReleasesXMLParser:
                 filename, ext = os.path.splitext(front_cover_url)
                 filename = "{}_{}_primary{}".format(release_id, master_id, ext)
                 filepath = os.path.join(self.images_dir, filename)
-                end_time = time.time()
-                ellapsed_time = end_time - start_time
-                sleep_time = max((1.02 - ellapsed_time), 0)
-                time.sleep(sleep_time)
+                self.wait_for_rate_limit()
                 try:
                     urllib.request.urlretrieve(front_cover_url, filepath)
                 except:
@@ -65,7 +73,7 @@ class DiscogsReleasesXMLParser:
                         "Downloading cover failed for release {} ({})"
                         .format(release_id, front_cover_url)
                     )
-                start_time = time.time()
+                self.reset_rate_limit_timer()
                 print(filepath)
 
             elem.clear()
