@@ -1,5 +1,5 @@
-import json
 import os
+import glob
 import sys
 import xml.etree.ElementTree as etree
 import urllib
@@ -10,17 +10,16 @@ from typing import List, Tuple
 class DiscogsAlbumCoverExtractor:
     """Parser for Discogs release dump files."""
 
-    def __init__(self, discogs_client, input_file, images_dir):
+    def __init__(self, discogs_client, images_dir):
         """Init DiscogsReleasesXMLParser with."""
         self.discogs_client = discogs_client
-        self.input_file = input_file
         self.images_dir = images_dir
         self.start_time = time.time()
 
     def list_saved_release_id(self) -> List[int]:
         """Return a list of all saved releases ID."""
         saved_releases = []
-        for path, subdirs, files in os.walk(self.images_dir):
+        for _path, _subdirs, files in os.walk(self.images_dir):
             for name in [f for f in files if "primary" in f]:
                 release_id = int(name.split("_")[0])
                 saved_releases.append(release_id)
@@ -33,6 +32,16 @@ class DiscogsAlbumCoverExtractor:
         saved_release_ids = self.list_saved_release_id()
         return saved_release_ids[-1]
 
+    def release_already_saved(self, release_id: int) -> bool:
+        """Return true if we've already saved the relase and false otherwise.
+
+        Args:
+            release_id (int): the Realease ID
+        """
+        matches = glob.glob(f"{self.images_dir}{release_id}_*")
+
+        return len(matches) > 0
+
     def reset_rate_limit_timer(self):
         """Reset the rate limiting timer."""
         self.start_time = time.time()
@@ -44,45 +53,91 @@ class DiscogsAlbumCoverExtractor:
         sleep_time = max((1.02 - ellapsed_time), 0)
         time.sleep(sleep_time)
 
-    def run(self):
+    def download_cover(self, master_id, release_id, cover_url) -> str:
+        """Download the given release's cover image and wait for rate limiting.
+
+        Args:
+            master_id (int): The Master ID of the release
+            release_id (int): The Release ID.
+            cover_url (str): The URL of the release's front cover
+        Returns:
+            str: The file path of the downloaded cover.
+
+        Raises:
+            DownloadCoverFailed: The cover could not be downloaded.
+        """
+        filename, ext = os.path.splitext(cover_url)
+        filename = f"{release_id}_{master_id}_primary{ext}"
+        filepath = os.path.join(self.images_dir, filename)
+        self.wait_for_rate_limit()
+        try:
+            urllib.request.urlretrieve(cover_url, filepath)
+        except Exception as err:
+            raise DownloadCoverFailed(
+                f"Download cover failed for release {release_id} ({cover_url})"
+            ) from err
+        self.reset_rate_limit_timer()
+
+        return filepath
+
+    def extract_from_my_collection(self):
+        """Extract the album covers from my discogs collection."""
+        me = self.discogs_client.identity()
+        for item in me.collection_folders[0].releases:
+            release_id = item.release.id
+            if self.release_already_saved(release_id):
+                continue
+            try:
+                release = self.discogs_client.release(release_id)
+                master_id = release.master.id
+                front_cover_url = get_front_cover_url(release)
+                filepath = self.download_cover(
+                    master_id,
+                    release_id,
+                    front_cover_url
+                )
+            except Exception as err:
+                print(err, file=sys.stderr)
+                continue
+
+            print(filepath)
+
+    def extract_from_xml_dump(self, input_file):
         """Extract the album covers."""
         latest_saved_release_id = self.get_latest_saved_release_id()
 
-        for event, elem in etree.iterparse(self.input_file, events=("start",)):
+        for _event, elem in etree.iterparse(input_file, events=("start",)):
             if elem.tag == "release":
                 try:
                     master_id, release_id = validate_xml_release(
                         elem,
                         latest_saved_release_id
                     )
+                    if self.release_already_saved(release_id):
+                        continue
                     release = self.discogs_client.release(release_id)
                     front_cover_url = get_front_cover_url(release)
+                    filepath = self.download_cover(
+                        master_id,
+                        release_id,
+                        front_cover_url
+                    )
                 except Exception as err:
                     print(err, file=sys.stderr)
                     elem.clear()
                     continue
 
-                filename, ext = os.path.splitext(front_cover_url)
-                filename = "{}_{}_primary{}".format(release_id, master_id, ext)
-                filepath = os.path.join(self.images_dir, filename)
-                self.wait_for_rate_limit()
-                try:
-                    urllib.request.urlretrieve(front_cover_url, filepath)
-                except:
-                    print(
-                        "Downloading cover failed for release {} ({})"
-                        .format(release_id, front_cover_url)
-                    )
-                self.reset_rate_limit_timer()
                 print(filepath)
 
             elem.clear()
 
 
+class DownloadCoverFailed(Exception):
+    """Raise when we the download of a cover falied."""
+
+
 class AlbumCoverURLNotFound(Exception):
     """Raise when we cannot find an album's cover."""
-
-    pass
 
 
 class UnprocessableRelease(Exception):
@@ -91,8 +146,6 @@ class UnprocessableRelease(Exception):
     For example: an album without vinyl release,
     or without valid master_id and release_id
     """
-
-    pass
 
 
 def validate_xml_release(xml_release, last_release_id=None) -> Tuple[int, int]:
@@ -117,26 +170,24 @@ def validate_xml_release(xml_release, last_release_id=None) -> Tuple[int, int]:
     release_id = int(release_id)
 
     if (last_release_id is not None and release_id <= last_release_id):
-        raise UnprocessableRelease(
-            "Already parsed release {}".format(release_id)
-        )
+        raise UnprocessableRelease(f"Already parsed release {release_id}")
 
     formats = xml_release.find('formats')
     if formats is None:
         raise UnprocessableRelease(
-            "No format associated with release {}".format(release_id)
+            f"No format associated with release {release_id}"
         )
 
     is_vinyl_release = any(f.get('name') == 'Vinyl' for f in formats)
     if not is_vinyl_release:
         raise UnprocessableRelease(
-            "No vinyl associated with release {}".format(release_id)
+            f"No vinyl associated with release {release_id}"
         )
 
     master = xml_release.find('master_id')
     if master is None or master.text is None:
         raise UnprocessableRelease(
-            "Could not find master_id for release {}".format(release_id)
+            f"Could not find master_id for release {release_id}"
         )
     master_id = int(master.text)
 
@@ -156,16 +207,12 @@ def get_front_cover_url(release) -> str:
         AlbumCoverURLNotFound: The front cover URL could not been found.
     """
     if release.images is None:
-        raise AlbumCoverURLNotFound(
-            "No images for release {}".format(release.id)
-        )
+        raise AlbumCoverURLNotFound(f"No images for release {release.id}")
     front_cover = next(
         filter(lambda x: x.get('type') == 'primary', release.images),
         None
     )
     if front_cover is None:
-        raise AlbumCoverURLNotFound(
-            "No front cover for release {}".format(release.id)
-        )
+        raise AlbumCoverURLNotFound(f"No front cover for release {release.id}")
 
     return front_cover.get('uri')

@@ -20,6 +20,7 @@ input_file = os.path.join(cur_dir, '../ressources/discogs_20220601_releases.xml'
 images_dir = os.path.join(cur_dir, '../images/')
 
 
-extractor = DiscogsAlbumCoverExtractor(discogs_client, input_file, images_dir)
+extractor = DiscogsAlbumCoverExtractor(discogs_client, images_dir)
 
-extractor.run()
+extractor.extract_from_xml_dump(input_file)
+# extractor.extract_from_my_collection()
