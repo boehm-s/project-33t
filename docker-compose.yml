@@ -1,13 +1,25 @@
-version: '2'
+version: '3.0'
 services:
-  match:
-    image: dsys/match:latest
+  api:
+    build:
+      context: .
+      dockerfile: ${PWD}/docker/api/Dockerfile
     ports:
-    - 127.0.0.1:8888:8888
-    command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "gunicorn", "-b", "0.0.0.0:8888", "-w", "4", "server:app"]
+    - 8888:8888
+    environment:
+    - PYTHONUNBUFFERED=1
+    - FLASK_APP=server.py
+    # command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "gunicorn", "-b", "0.0.0.0:8888", "-w", "4", "server:app"]
+    command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "flask", "run","--host=0.0.0.0", "-p", "8888"]
     links:
     - elasticsearch
+    
   elasticsearch:
-    image: elasticsearch:6.4.2
+    image: elasticsearch:8.3.3
+    environment:
+    - PYTHONUNBUFFERED=1
+    - "ES_JAVA_OPTS=-Xms8192m -Xmx8192m"
+    - xpack.security.enabled=false
+    - discovery.type=single-node
     ports:
-    - 127.0.0.1:9200:9200
+    - 9200:9200

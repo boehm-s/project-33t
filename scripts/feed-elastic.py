@@ -21,7 +21,7 @@ images_dir = os.path.join(cur_dir, '../images/')
 images_files = glob.glob("{}*_*".format(images_dir))
 for filepath in images_files:
     filename = filepath.split('/')[-1]
-    elastic_filepath = "discogs/{}".format(filename)
+    elastic_filepath = f"discogs/{filename}"
     files = {'image': open(filepath, 'rb')}
     values = {'filepath': elastic_filepath}
     r = requests.post('http://localhost:8888/add', files=files, data=values)

@@ -12,4 +12,13 @@ Use cases :
 
 Using image-match to recognize albums cover [has proven successful at Deezer](https://deezer.io/matching-albums-through-cover-art-fingerprinting-bdca82cd17dc), that's why I'll be using this method.
 
-## 
+## Building the API with docker-compose
+
+```
+COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose build
+```
+
+## TODO
+
+- Get ProvenanceLabs/image-match code and upgrade to recent versions of Python / Elastic / Numpy etc.
+- Run somthing like dsys/match with FastAPI instead of Flask
