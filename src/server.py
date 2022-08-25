@@ -1,15 +1,15 @@
 from flask import Flask, request
-from image_match.elasticsearch_driver import SignatureES
-from image_match.goldberg import ImageSignature
+from .image_match.elasticsearch_driver import SignatureES
+from .image_match.goldberg import ImageSignature
 import json
 import os
 import sys
 
-from elasticsearch import Elasticsearch, helpers
-import urllib3
+from elasticsearch import Elasticsearch
 
 # =============================================================================
 # Globals
+
 
 es_url = os.environ['ELASTICSEARCH_URL']
 es_index = os.environ['ELASTICSEARCH_INDEX']
@@ -28,11 +28,13 @@ es.indices.create(index=es_index, ignore=400)
 # =============================================================================
 # Helpers
 
+
 def ids_with_path(path):
     matches = es.search(index=es_index,
                         _source='_id',
                         q='path:' + json.dumps(path))
     return [m['_id'] for m in matches['hits']['hits']]
+
 
 def paths_at_location(offset, limit):
     search = es.search(index=es_index,
@@ -41,15 +43,19 @@ def paths_at_location(offset, limit):
                        _source='path')
     return [h['_source']['path'] for h in search['hits']['hits']]
 
+
 def count_images():
     return es.count(index=es_index)['count']
+
 
 def delete_ids(ids):
     for i in ids:
         es.delete(index=es_index, doc_type=es_doc_type, id=i, ignore=404)
 
+
 def dist_to_percent(dist):
     return (1 - dist) * 100
+
 
 def get_image(url_field, file_field):
     if url_field in request.form:

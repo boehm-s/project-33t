@@ -1,3 +1,15 @@
 python3-discogs-client >= 2.3
 python-dotenv >= 0.20
 requests >= 2.22
+
+
+numpy==1.20
+scipy==1.6
+flask==2.0.0
+fastapi==0.80
+elasticsearch==8.3.3
+scikit-image==0.19
+Pillow==9.0.0
+CairoSVG==2.5.2
+six==1.16.0
+testresources==2.0.1

@@ -114,6 +114,7 @@ class DiscogsAlbumCoverExtractor:
                         latest_saved_release_id
                     )
                     if self.release_already_saved(release_id):
+                        elem.clear()
                         continue
                     release = self.discogs_client.release(release_id)
                     front_cover_url = get_front_cover_url(release)

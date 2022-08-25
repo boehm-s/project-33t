@@ -1,19 +1,23 @@
-FROM python:3.6
+FROM python:3.8
+
+COPY requirements.txt docker/wait-for-it.sh ./
 
 RUN apt-get update && \
     apt-get install -y libopenblas-dev gfortran && \
-    pip install numpy==1.12.1 && \
-    pip install scipy==0.19.0 && \
-    pip install gunicorn==19.7.1 && \
-    pip install flask==0.12.2 && \
-    pip install image-match==1.1.2 && \
-    pip install elasticsearch==8.3.3 && \
+    pip install -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip install certifi
 RUN pip install --upgrade pyopenssl
 
-COPY src/server.py docker/wait-for-it.sh /
+WORKDIR /project
+
+RUN touch  __init__.py
+
+COPY setup.py src/ scripts/  ./
+
+WORKDIR /
+
 
 EXPOSE 80
 ENV PORT=80 \
@@ -32,4 +36,4 @@ ENV PORT=80 \
 #     -w ${WORKER_COUNT} \
 #     server:app
 
-CMD FLASK_APP=server.py flask run -p ${PORT}
+# CMD FLASK_APP=server.py flask run -p ${PORT}
