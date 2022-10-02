@@ -21,4 +21,4 @@ COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose build
 ## TODO
 
 - Get ProvenanceLabs/image-match code and upgrade to recent versions of Python / Elastic / Numpy etc.
-- Run somthing like dsys/match with FastAPI instead of Flask
+- Run something like dsys/match with FastAPI instead of Flask

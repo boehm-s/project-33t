@@ -17,7 +17,7 @@ discogs_client = discogs_client.Client(
 )
 
 input_file = os.path.join(cur_dir, '../ressources/discogs_20220601_releases.xml')
-images_dir = os.path.join(cur_dir, '../images/')
+images_dir = os.path.join(cur_dir, '../images')
 
 
 extractor = DiscogsAlbumCoverExtractor(discogs_client, images_dir)

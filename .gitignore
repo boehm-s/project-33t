@@ -1,6 +1,8 @@
 ressources/*
 images/
 !ressources/sample_discogs_releases.xml
+*.iml
+.idea
 
 
 # Byte-compiled / optimized / DLL files
