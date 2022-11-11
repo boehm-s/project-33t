@@ -1,20 +1,21 @@
 import os
 import glob
 import sys
-import xml.etree.ElementTree as etree
+import xml.etree.ElementTree as Etree
 import urllib
-import time
 from typing import List, Tuple
+
+from src.discogs.rate_limiter import RateLimiter
 
 
 class DiscogsAlbumCoverExtractor:
     """Parser for Discogs release dump files."""
 
     def __init__(self, discogs_client, images_dir):
-        """Init DiscogsReleasesXMLParser with."""
+        """Init DiscogsAlbumCoverExtractor with discogs_client and images_dir."""
         self.discogs_client = discogs_client
         self.images_dir = images_dir
-        self.start_time = time.time()
+        self.rate_limiter = RateLimiter(0.98)
 
     def list_saved_release_id(self) -> List[int]:
         """Return a list of all saved releases ID."""
@@ -42,16 +43,6 @@ class DiscogsAlbumCoverExtractor:
 
         return len(matches) > 0
 
-    def reset_rate_limit_timer(self):
-        """Reset the rate limiting timer."""
-        self.start_time = time.time()
-
-    def wait_for_rate_limit(self):
-        """Wait 1 second after last image request to Discogs."""
-        end_time = time.time()
-        ellapsed_time = end_time - self.start_time
-        sleep_time = max((1.02 - ellapsed_time), 0)
-        time.sleep(sleep_time)
 
     def download_cover(self, master_id, release_id, cover_url) -> str:
         """Download the given release's cover image and wait for rate limiting.
@@ -69,14 +60,14 @@ class DiscogsAlbumCoverExtractor:
         filename, ext = os.path.splitext(cover_url)
         filename = f"{release_id}_{master_id}_primary{ext}"
         filepath = os.path.join(self.images_dir, filename)
-        self.wait_for_rate_limit()
+        self.rate_limiter.wait_for_rate_limit()
         try:
             urllib.request.urlretrieve(cover_url, filepath)
         except Exception as err:
             raise DownloadCoverFailed(
                 f"Download cover failed for release {release_id} ({cover_url})"
             ) from err
-        self.reset_rate_limit_timer()
+        self.rate_limiter.reset_timer()
 
         return filepath
 
@@ -106,7 +97,7 @@ class DiscogsAlbumCoverExtractor:
         """Extract the album covers."""
         latest_saved_release_id = self.get_latest_saved_release_id()
 
-        for _event, elem in etree.iterparse(input_file, events=("start",)):
+        for _event, elem in Etree.iterparse(input_file, events=("start",)):
             if elem.tag == "release":
                 try:
                     master_id, release_id = validate_xml_release(
@@ -134,7 +125,7 @@ class DiscogsAlbumCoverExtractor:
 
 
 class DownloadCoverFailed(Exception):
-    """Raise when we the download of a cover falied."""
+    """Raise when the download of a cover falied."""
 
 
 class AlbumCoverURLNotFound(Exception):
@@ -170,7 +161,7 @@ def validate_xml_release(xml_release, last_release_id=None) -> Tuple[int, int]:
         raise UnprocessableRelease("Could not determine release_id ")
     release_id = int(release_id)
 
-    if (last_release_id is not None and release_id <= last_release_id):
+    if last_release_id is not None and release_id <= last_release_id:
         raise UnprocessableRelease(f"Already parsed release {release_id}")
 
     formats = xml_release.find('formats')

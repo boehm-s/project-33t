@@ -14,7 +14,7 @@ WORKDIR /project
 
 RUN touch  __init__.py
 
-COPY setup.py src/ scripts/  ./
+COPY setup.py src/  ./
 
 WORKDIR /
 

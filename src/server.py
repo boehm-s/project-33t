@@ -6,6 +6,7 @@ import os
 import sys
 
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import scan
 
 # =============================================================================
 # Globals
@@ -36,14 +37,6 @@ def ids_with_path(path):
     return [m['_id'] for m in matches['hits']['hits']]
 
 
-def paths_at_location(offset, limit):
-    search = es.search(index=es_index,
-                       from_=offset,
-                       size=limit,
-                       _source='path')
-    return [h['_source']['path'] for h in search['hits']['hits']]
-
-
 def count_images():
     return es.count(index=es_index)['count']
 
@@ -68,21 +61,15 @@ def get_image(url_field, file_field):
 
 @app.route('/add', methods=['POST'])
 def add_handler():
-    print("000000000000000000000")
     path = request.form['filepath']
-    print("11111111111111111111")
     try:
         metadata = json.loads(request.form['metadata'])
     except KeyError:
         metadata = None
     img, bs = get_image('url', 'image')
-    print("22222222222222222222")
     old_ids = ids_with_path(path)
-    print(old_ids)
     ses.add_image(path, img, bytestream=bs, metadata=metadata)
-    print("333333333333333333333")
     delete_ids(old_ids)
-    print("4444444444444444444444")
 
     return json.dumps({
         'status': 'ok',
@@ -149,6 +136,25 @@ def count_handler():
         'result': [count]
     })
 
+
+
+@app.route('/list-discogs-files', methods=['GET'])
+def list_discogs_files_handler():
+    result = []
+    query = {
+        "_source": "images.path",
+        "query": {"match_all": {}}
+    }
+
+    for hit in scan(es, index=es_index, query=query):
+        path = hit["_source"]["images"]["path"]
+        filename = path.split("/")[1]
+        result.append(filename)
+
+    return json.dumps({
+        'result': result
+    })
+
 @app.route('/list', methods=['GET', 'POST'])
 def list_handler():
     if request.method == 'GET':
@@ -157,13 +163,16 @@ def list_handler():
     else:
         offset = max(int(request.form.get('offset', 0)), 0)
         limit = max(int(request.form.get('limit', 20)), 0)
-    paths = paths_at_location(offset, limit)
+
+    response = es.search(index=es_index, from_=offset, size=limit, _source='images')
+    result = response['hits']['hits']
+    # result = [hit['_source'] for hit in response['hits']['hits']]
 
     return json.dumps({
         'status': 'ok',
         'error': [],
         'method': 'list',
-        'result': paths
+        'result': result
     })
 
 @app.route('/ping', methods=['GET', 'POST'])

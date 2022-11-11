@@ -19,7 +19,7 @@ setup(
        'testresources==2.0.1'
    ],
    scripts=[
-       'scripts/import-covers.py',
-       'scripts/feed-elastic.py',
+       'src/scripts/import-covers.py',
+       'src/scripts/feed-elastic.py',
    ]
 )

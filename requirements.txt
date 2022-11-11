@@ -3,8 +3,8 @@ python-dotenv >= 0.20
 requests >= 2.22
 
 
-numpy==1.20
-scipy==1.6
+numpy==1.22
+scipy==1.9
 flask==2.0.0
 fastapi==0.80
 elasticsearch==8.3.3
