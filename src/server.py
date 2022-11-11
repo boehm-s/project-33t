@@ -116,13 +116,15 @@ def compare_handler():
     img2, bs2 = get_image('url2', 'image2')
     img1_sig = gis.generate_signature(img1, bytestream=bs1)
     img2_sig = gis.generate_signature(img2, bytestream=bs2)
-    score = dist_to_percent(gis.normalized_distance(img1_sig, img2_sig))
+    distance = gis.normalized_distance(img1_sig, img2_sig)
+    score = dist_to_percent(distance)
 
     return json.dumps({
         'status': 'ok',
         'error': [],
         'method': 'compare',
-        'result': [{ 'score': score }]
+        'score': score,
+        'distance': distance,
     })
 
 @app.route('/count', methods=['GET', 'POST'])

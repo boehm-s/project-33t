@@ -68,7 +68,6 @@ class SignatureES(SignatureDatabaseBase):
                               body=body,
                               size=self.size,
                               timeout=self.timeout)['hits']['hits']
-
         sigs = np.array([x['_source'][self.doc_type]['signature'] for x in res])
 
         if sigs.size == 0:
@@ -81,7 +80,6 @@ class SignatureES(SignatureDatabaseBase):
                           'metadata': x['_source'][self.doc_type].get('metadata'),
                           'path': x['_source'][self.doc_type].get('url', x['_source'][self.doc_type].get('path'))}
                          for x in res]
-
         for i, row in enumerate(formatted_res):
             row['dist'] = dists[i]
         formatted_res = filter(lambda y: y['dist'] < self.distance_cutoff, formatted_res)
