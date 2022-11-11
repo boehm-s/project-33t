@@ -3,7 +3,6 @@ from .image_match.elasticsearch_driver import SignatureES
 from .image_match.goldberg import ImageSignature
 import json
 import os
-import sys
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
