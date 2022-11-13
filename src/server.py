@@ -3,6 +3,7 @@ from .image_match.elasticsearch_driver import SignatureES
 from .image_match.goldberg import ImageSignature
 import json
 import os
+import time
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
@@ -72,9 +73,6 @@ def add_handler():
 
     return json.dumps({
         'status': 'ok',
-        'error': [],
-        'method': 'add',
-        'result': []
     })
 
 @app.route('/delete', methods=['DELETE'])
@@ -84,9 +82,6 @@ def delete_handler():
     delete_ids(ids)
     return json.dumps({
         'status': 'ok',
-        'error': [],
-        'method': 'delete',
-        'result': []
     })
 
 @app.route('/search', methods=['POST'])
@@ -94,15 +89,18 @@ def search_handler():
     img, bs = get_image('url', 'image')
     ao = request.form.get('all_orientations', all_orientations) == 'true'
 
+    start_time = time.time()
     matches = ses.search_image(
             path=img,
+            new_instance=new_instance,
             all_orientations=ao,
             bytestream=bs)
+    end_time = time.time()
+    search_time = end_time - start_time
 
     return json.dumps({
         'status': 'ok',
-        'error': [],
-        'method': 'search',
+        'search_time': search_time,
         'result': [{
             'score': dist_to_percent(m['dist']),
             'filepath': m['path'],
@@ -121,8 +119,6 @@ def compare_handler():
 
     return json.dumps({
         'status': 'ok',
-        'error': [],
-        'method': 'compare',
         'score': score,
         'distance': distance,
     })
@@ -166,13 +162,9 @@ def list_handler():
         limit = max(int(request.form.get('limit', 20)), 0)
 
     response = es.search(index=es_index, from_=offset, size=limit, _source='images')
-    result = response['hits']['hits']
-    # result = [hit['_source'] for hit in response['hits']['hits']]
+    result = [hit['_source'] for hit in response['hits']['hits']]
 
     return json.dumps({
-        'status': 'ok',
-        'error': [],
-        'method': 'list',
         'result': result
     })
 

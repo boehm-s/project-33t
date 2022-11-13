@@ -20,9 +20,8 @@ COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose build
 
 ## Notes
 
-For now it seems to work with URL images but not local images ... WHY ?????
 
-Example of image that works : for the album Islannds by King Crimson : https://i.discogs.com/T-I8kKs0bzdXOXivmoR8YiOV7kK4KFmYOqqvxXnewxk/rs:fit/g:sm/q:40/h:300/w:300/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzNzAw/OTctMTU0OTcwMjUy/Ny0xOTYxLmpwZWc.jpeg
+Seems to work only for near-identical images
 
 ## TODO
 

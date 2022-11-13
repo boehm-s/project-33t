@@ -9,7 +9,6 @@ services:
     environment:
     - PYTHONUNBUFFERED=1
     - FLASK_APP=project/server.py
-    # command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "gunicorn", "-b", "0.0.0.0:8888", "-w", "4", "server:app"]
     command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "flask", "run","--host=0.0.0.0", "-p", "8888"]
     links:
     - elasticsearch
