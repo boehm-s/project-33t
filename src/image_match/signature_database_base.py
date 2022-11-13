@@ -1,7 +1,10 @@
 from .goldberg import ImageSignature
 from itertools import product
+from multiprocessing import Process, Array
 from operator import itemgetter
 import numpy as np
+
+global_result = []
 
 
 class SignatureDatabaseBase(object):
@@ -208,7 +211,7 @@ class SignatureDatabaseBase(object):
         rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
         self.insert_single_record(rec, refresh_after=refresh_after)
 
-    def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None):
+    def search_image(self, path, new_instance, all_orientations=False, bytestream=False, pre_filter=None):
         """Search for matches
 
         Args:
@@ -262,17 +265,18 @@ class SignatureDatabaseBase(object):
 
         # try for every possible combination of transformations; if all_orientations=False,
         # this will only take one iteration
-        result = []
 
         orientations = set(np.ravel(list(orientations)))
+        processes = []
+        result = Array('result', [])
         for transform in orientations:
-            # compose all functions and apply on signature
-            transformed_img = transform(img)
+            instance = new_instance()
+            proc = Process(target=parallel_search_image, args=(transform, img, instance, pre_filter, result))
+            proc.start()
+            processes.append(proc)
 
-            # generate the signature
-            transformed_record = make_record(transformed_img, self.gis, self.k, self.N)
-            l = self.search_single_record(transformed_record, pre_filter=pre_filter)
-            result.extend(l)
+        for proc in processes:
+            proc.join()
 
         ids = set()
         unique = []
@@ -283,6 +287,16 @@ class SignatureDatabaseBase(object):
 
         r = sorted(unique, key=itemgetter('dist'))
         return r
+
+# self.search_single_record, img, self.gis, self.k, self.N
+def parallel_search_image(transform, img, inst, pre_filter, result):
+    global global_result
+    transformed_img = transform(img)
+
+    # generate the signature
+    transformed_record = make_record(transformed_img, inst.gis, inst.k, inst.N)
+    l = inst.search_single_record(transformed_record, pre_filter=pre_filter)
+    result.extend(l)
 
 
 def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):

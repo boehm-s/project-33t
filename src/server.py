@@ -84,6 +84,15 @@ def delete_handler():
         'status': 'ok',
     })
 
+def new_instance():
+    es_index = os.environ['ELASTICSEARCH_INDEX']
+    es_doc_type = os.environ['ELASTICSEARCH_DOC_TYPE']
+    es = Elasticsearch("http://elasticsearch:9200")
+    ses = SignatureES(es, index=es_index, doc_type=es_doc_type)
+
+    return ses
+
+
 @app.route('/search', methods=['POST'])
 def search_handler():
     img, bs = get_image('url', 'image')

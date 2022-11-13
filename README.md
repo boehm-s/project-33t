@@ -20,10 +20,11 @@ COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose build
 
 ## Notes
 
+Elastic is thread safe but one instance cannot be used across threads. 
+So, in order to parallelize multi-orientation image saerch, we'll have to create a new instance of SignatureES per thread.
 
 Seems to work only for near-identical images
 
 ## TODO
 
-- Get ProvenanceLabs/image-match code and upgrade to recent versions of Python / Elastic / Numpy etc.
-- Run something like dsys/match with FastAPI instead of Flask
+- Use FastAPI instead of Flask
