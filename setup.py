@@ -10,9 +10,8 @@ setup(
    install_requires=[
        'numpy==1.20',
        'scipy==1.6',
-       'flask==2.0.0',
        'elasticsearch==8.3.3',
-       'scikit-image==0.19',
+       'scikit-image==0.17.2',
        'Pillow==9.0.0',
        'CairoSVG==2.5.2',
        'six==1.16.0',

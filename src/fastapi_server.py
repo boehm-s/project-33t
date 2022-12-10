@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 from os import environ
 import json
 import time
 
-from .image_match.elasticsearch_driver import SignatureES
-from .image_match.goldberg import ImageSignature
+from src.image_match.elasticsearch_driver import SignatureES
+from src.image_match.goldberg import ImageSignature
 
 load_dotenv()
 
@@ -29,21 +30,21 @@ es.indices.create(index=ES_INDEX, ignore=400)
 app = FastAPI()
 
 
-def get_image(url_field: Optional[str], file_field: Optional[UploadFile]):
+def get_image(url_field: Optional[str], file_field: Optional[bytes]):
     if url_field is not None and file_field is not None:
         raise HTTPException(status_code=400, detail="You cannot provide an image and an URL, you must chose one")
 
     if url_field:
         return url_field, False
     elif file_field:
-        return file_field.file, True
+        return file_field, True
     else:
         raise HTTPException(status_code=400, detail="You must provide an image as a file or an URL")
 
 
-@app.get("/add")
+@app.post("/add")
 def add_handler(
-        image: Optional[UploadFile] = File(),
+        image: Optional[bytes] = File(),
         url: Optional[str] = Form(None),
         filepath: Optional[str] = Form(),
         metadata: str = Form(),
@@ -62,14 +63,14 @@ def add_handler(
     # Then, add the current image
     ses.add_image(filepath, img, bytestream=bs, metadata=metadata)
 
-    return json.dumps({
+    return JSONResponse(content={
         'status': 'ok',
     })
 
 
 @app.post("/search")
 async def search_handler(
-        image: Optional[UploadFile] = File(None),
+        image: Optional[bytes] = File(None),
         url: Optional[str] = Form(None),
         all_orientations: bool = Form(),
 ):
@@ -83,7 +84,7 @@ async def search_handler(
     end_time = time.time()
     search_time = end_time - start_time
 
-    return json.dumps({
+    return JSONResponse(content={
         'status': 'ok',
         'search_time': search_time,
         'result': [{
@@ -106,13 +107,13 @@ async def list_discogs_files_handler():
         filename = path.split("/")[1]
         result.append(filename)
 
-    return json.dumps({
+    return JSONResponse(content={
         'result': result
     })
 
 @app.get("/count")
 async def count_handler():
     count = es.count(index=ES_INDEX)['count']
-    return json.dumps({
-        'count': count,
+    return JSONResponse(content={
+        'count': count
     })
