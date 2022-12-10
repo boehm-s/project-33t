@@ -1,217 +1,119 @@
-from flask import Flask, request
-from .image_match.elasticsearch_driver import SignatureES
-from .image_match.goldberg import ImageSignature
-import json
-import os
-import time
+from typing import Optional
 
+from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+from os import environ
+import json
+import time
 
-# =============================================================================
-# Globals
+from src.image_match.elasticsearch_driver import SignatureES
+from src.image_match.goldberg import ImageSignature
 
+load_dotenv()
 
-es_url = os.environ['ELASTICSEARCH_URL']
-es_index = os.environ['ELASTICSEARCH_INDEX']
-es_doc_type = os.environ['ELASTICSEARCH_DOC_TYPE']
-all_orientations = os.environ['ALL_ORIENTATIONS']
+ES_URL = environ['ELASTICSEARCH_URL']
+ES_INDEX = environ['ELASTICSEARCH_INDEX']
+ES_DOC_TYPE = environ['ELASTICSEARCH_DOC_TYPE']
+ALL_ORIENTATIONS = environ['ALL_ORIENTATIONS']
 
-app = Flask(__name__)
-es = Elasticsearch("http://elasticsearch:9200")
-ses = SignatureES(es, index=es_index, doc_type=es_doc_type)
+es = Elasticsearch(ES_URL)
+ses = SignatureES(es, index=ES_INDEX, doc_type=ES_DOC_TYPE)
 gis = ImageSignature()
 
 # Try to create the index and ignore IndexAlreadyExistsException
 # if the index already exists
-es.indices.create(index=es_index, ignore=400)
+es.indices.create(index=ES_INDEX, ignore=400)
 
-# =============================================================================
-# Helpers
-
-
-def ids_with_path(path):
-    matches = es.search(index=es_index,
-                        _source='_id',
-                        q='path:' + json.dumps(path))
-    return [m['_id'] for m in matches['hits']['hits']]
+app = FastAPI()
 
 
-def count_images():
-    return es.count(index=es_index)['count']
+def get_image(url_field: Optional[str], file_field: Optional[bytes]):
+    if url_field is not None and file_field is not None:
+        raise HTTPException(status_code=400, detail="You cannot provide an image and an URL, you must chose one")
 
-
-def delete_ids(ids):
-    for i in ids:
-        es.delete(index=es_index, doc_type=es_doc_type, id=i, ignore=404)
-
-
-def dist_to_percent(dist):
-    return (1 - dist) * 100
-
-
-def get_image(url_field, file_field):
-    if url_field in request.form:
-        return request.form[url_field], False
+    if url_field:
+        return url_field, False
+    elif file_field:
+        return file_field, True
     else:
-        return request.files[file_field].read(), True
+        raise HTTPException(status_code=400, detail="You must provide an image as a file or an URL")
 
-# =============================================================================
-# Routes
 
-@app.route('/add', methods=['POST'])
-def add_handler():
-    path = request.form['filepath']
+@app.post("/add")
+def add_handler(
+        image: Optional[bytes] = File(),
+        url: Optional[str] = Form(None),
+        filepath: Optional[str] = Form(),
+        metadata: str = Form(),
+):
     try:
-        metadata = json.loads(request.form['metadata'])
+        metadata = json.loads(metadata)
     except KeyError:
         metadata = None
-    img, bs = get_image('url', 'image')
-    old_ids = ids_with_path(path)
-    ses.add_image(path, img, bytestream=bs, metadata=metadata)
-    delete_ids(old_ids)
 
-    return json.dumps({
+    img, bs = get_image(url, image)
+    # First, delete the old matches, to upsert the image
+    old_matches = es.search(index=ES_INDEX, _source='_id', q='path:' + json.dumps(filepath))
+    for m in old_matches['hits']['hits']:
+        es.delete(index=ES_INDEX, doc_type=ES_DOC_TYPE, id=m['_id'], ignore=404)
+
+    # Then, add the current image
+    ses.add_image(filepath, img, bytestream=bs, metadata=metadata)
+
+    return JSONResponse(content={
         'status': 'ok',
     })
 
-@app.route('/delete', methods=['DELETE'])
-def delete_handler():
-    path = request.form['filepath']
-    ids = ids_with_path(path)
-    delete_ids(ids)
-    return json.dumps({
-        'status': 'ok',
-    })
 
-@app.route('/search', methods=['POST'])
-def search_handler():
-    img, bs = get_image('url', 'image')
-    ao = request.form.get('all_orientations', all_orientations) == 'true'
+@app.post("/search")
+async def search_handler(
+        image: Optional[bytes] = File(None),
+        url: Optional[str] = Form(None),
+        all_orientations: bool = Form(),
+):
+    img, bs = get_image(url, image)
 
     start_time = time.time()
     matches = ses.search_image(
-            path=img,
-            new_instance=new_instance,
-            all_orientations=ao,
-            bytestream=bs)
+        path=img,
+        all_orientations=all_orientations or ALL_ORIENTATIONS,
+        bytestream=bs)
     end_time = time.time()
     search_time = end_time - start_time
 
-    return json.dumps({
+    return JSONResponse(content={
         'status': 'ok',
         'search_time': search_time,
         'result': [{
-            'score': dist_to_percent(m['dist']),
+            'score': (1 - m['dist']) * 100,
             'filepath': m['path'],
             'metadata': m['metadata']
         } for m in matches]
     })
 
-@app.route('/compare', methods=['POST'])
-def compare_handler():
-    img1, bs1 = get_image('url1', 'image1')
-    img2, bs2 = get_image('url2', 'image2')
-    img1_sig = gis.generate_signature(img1, bytestream=bs1)
-    img2_sig = gis.generate_signature(img2, bytestream=bs2)
-    distance = gis.normalized_distance(img1_sig, img2_sig)
-    score = dist_to_percent(distance)
-
-    return json.dumps({
-        'status': 'ok',
-        'score': score,
-        'distance': distance,
-    })
-
-@app.route('/count', methods=['GET', 'POST'])
-def count_handler():
-    count = count_images()
-    return json.dumps({
-        'status': 'ok',
-        'error': [],
-        'method': 'count',
-        'result': [count]
-    })
-
-
-
-@app.route('/list-discogs-files', methods=['GET'])
-def list_discogs_files_handler():
+@app.get("/list-discogs-files")
+async def list_discogs_files_handler():
     result = []
     query = {
         "_source": "images.path",
         "query": {"match_all": {}}
     }
 
-    for hit in scan(es, index=es_index, query=query):
+    for hit in scan(es, index=ES_INDEX, query=query):
         path = hit["_source"]["images"]["path"]
         filename = path.split("/")[1]
         result.append(filename)
 
-    return json.dumps({
+    return JSONResponse(content={
         'result': result
     })
 
-@app.route('/list', methods=['GET', 'POST'])
-def list_handler():
-    if request.method == 'GET':
-        offset = max(int(request.args.get('offset', 0)), 0)
-        limit = max(int(request.args.get('limit', 20)), 0)
-    else:
-        offset = max(int(request.form.get('offset', 0)), 0)
-        limit = max(int(request.form.get('limit', 20)), 0)
-
-    response = es.search(index=es_index, from_=offset, size=limit, _source='images')
-    result = [hit['_source'] for hit in response['hits']['hits']]
-
-    return json.dumps({
-        'result': result
+@app.get("/count")
+async def count_handler():
+    count = es.count(index=ES_INDEX)['count']
+    return JSONResponse(content={
+        'count': count
     })
-
-@app.route('/ping', methods=['GET', 'POST'])
-def ping_handler():
-    return json.dumps({
-        'status': 'ok',
-        'error': [],
-        'method': 'ping',
-        'result': []
-    })
-
-# =============================================================================
-# Error Handling
-
-@app.errorhandler(400)
-def bad_request(e):
-    return json.dumps({
-        'status': 'fail',
-        'error': ['bad request'],
-        'method': '',
-        'result': []
-    }), 400
-
-@app.errorhandler(404)
-def page_not_found(e):
-    return json.dumps({
-        'status': 'fail',
-        'error': ['not found'],
-        'method': '',
-        'result': []
-    }), 404
-
-@app.errorhandler(405)
-def method_not_allowed(e):
-    return json.dumps({
-        'status': 'fail',
-        'error': ['method not allowed'],
-        'method': '',
-        'result': []
-    }), 405
-
-@app.errorhandler(500)
-def server_error(e):
-    return json.dumps({
-        'status': 'fail',
-        'error': [str(e)],
-        'method': '',
-        'result': []
-    }), 500

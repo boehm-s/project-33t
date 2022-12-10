@@ -8,9 +8,7 @@ services:
     - 8888:8888
     environment:
     - PYTHONUNBUFFERED=1
-    - FLASK_APP=project/server.py
-#    command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "flask", "run","--host=0.0.0.0", "-p", "8888"]
-    command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "uvicorn", "src.fastapi_server:app", "--host=0.0.0.0", "--port", "8888"]
+    command: ["/wait-for-it.sh", "-t", "60", "elasticsearch:9200", "--", "uvicorn", "src.server:app", "--host=0.0.0.0", "--port", "8888"]
     links:
     - elasticsearch
     
