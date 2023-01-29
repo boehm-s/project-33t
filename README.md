@@ -24,5 +24,4 @@ Seems to work only for near-identical images
 
 ## TODO
 
-- Get ProvenanceLabs/image-match code and upgrade to recent versions of Python / Elastic / Numpy etc.
-- Run something like dsys/match with FastAPI instead of Flask
+- Preprocess image : crop it into a square and always download the image when we're dealing with an URL

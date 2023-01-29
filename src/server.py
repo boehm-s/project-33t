@@ -30,7 +30,7 @@ es.indices.create(index=ES_INDEX, ignore=400)
 app = FastAPI()
 
 
-def get_image(url_field: Optional[str], file_field: Optional[bytes]):
+def get_image(url_field: Optional[str], file_field: Optional[bytes]): #TODO: when dealing with an URL, download the image and turn it into bytes
     if url_field is not None and file_field is not None:
         raise HTTPException(status_code=400, detail="You cannot provide an image and an URL, you must chose one")
 
