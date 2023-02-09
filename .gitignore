@@ -1,6 +1,7 @@
 ressources/*
 images/
 !ressources/sample_discogs_releases.xml
+!mobile_app/lib/
 *.iml
 .idea
 
@@ -21,7 +22,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
