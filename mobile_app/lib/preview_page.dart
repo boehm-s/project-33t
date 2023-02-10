@@ -23,16 +23,16 @@ class PreviewPage extends StatefulWidget {
 }
 
 class _PreviewPageState extends State<PreviewPage> {
-  late ApiResult<AlbumSearchResult> results;
+  late Future<AlbumSearchResult?> future_result;
 
   @override
   void initState() {
     super.initState();
 
-    searchAlbum(widget.picture);
+    future_result = searchAlbum(widget.picture);
   }
 
-  Future<ApiResult<AlbumSearchResult>?> searchAlbum(XFile picture) async {
+  Future<AlbumSearchResult?> searchAlbum(XFile picture) async {
     var apiUrl = dotenv.env['API_URL'];
     var url = Uri.parse("$apiUrl/search");
     var request = http.MultipartRequest('POST', url);
@@ -46,7 +46,8 @@ class _PreviewPageState extends State<PreviewPage> {
       final response = await http.Response.fromStream(streamedResponse);
       final body = response.body;
       log('res : $body');
-      return ApiResult.fromJson(jsonDecode(body));
+      final ApiResult<List<AlbumSearchResult>> result = ApiResult.fromJson(jsonDecode(body));
+      return result.result.first;
     } catch (e) {
       print(e);
       return null;
@@ -62,7 +63,30 @@ class _PreviewPageState extends State<PreviewPage> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Image.file(File(widget.picture.path), fit: BoxFit.cover, width: 250),
           const SizedBox(height: 24),
-          Text(widget.picture.name)
+          FutureBuilder(future: future_result, builder: (
+              BuildContext context,
+              AsyncSnapshot<AlbumSearchResult?> snapshot,
+              ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return CircularProgressIndicator();
+            } else if (snapshot.connectionState == ConnectionState.done) {
+              if (snapshot.hasError) {
+                return const Text('Error');
+              } else if (snapshot.hasData && snapshot.data != null) {
+                var release = snapshot.data!.metadata.discogs_release_data;
+                var album = '${release.artists_sort} - ${release.title}';
+
+                return Text(
+                    album,
+                    style: const TextStyle(color: Colors.cyan, fontSize: 36)
+                );
+              } else {
+                return const Text('Empty data');
+              }
+            } else {
+              return Text('State: ${snapshot.connectionState}');
+            }
+          },)
         ]),
       ),
     );
